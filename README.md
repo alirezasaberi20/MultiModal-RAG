@@ -23,40 +23,47 @@ A production-ready Retrieval-Augmented Generation system that processes PDFs mul
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        FastAPI Server                       │
-│                                                             │
-│  ┌──────────┐  ┌──────────────┐  ┌────────────────────┐    │
-│  │   Auth   │  │  Rate Limit  │  │  Request Logger    │    │
-│  │Middleware │  │  Middleware   │  │  Middleware         │    │
-│  └──────────┘  └──────────────┘  └────────────────────┘    │
-│                                                             │
-│  ┌─────────────────── API Routes ────────────────────────┐  │
-│  │  /auth  │  /documents  │  /chat  │  /conversations  │  │  │
-│  │         │              │         │  /usage           │  │  │
-│  └─────────────────────────────────────────────────────┘  │
-│                           │                                 │
-│              ┌────────────▼────────────┐                    │
-│              │      RAG Pipeline       │                    │
-│              │                         │                    │
-│  ┌───────────┴───────────────────────┐ │                    │
-│  │                                   │ │                    │
-│  │  PDF Parser ──► Chunker ──► Embedder ──► Vector Store   │
-│  │  (PyMuPDF)    (LangChain)  (OpenAI)    (ChromaDB)      │
-│  │  (pdfplumber)                                           │
-│  │                                   │ │                    │
-│  │  Query ──► Embed ──► Retrieve ──► Generate (GPT-4o)     │
-│  │                                   │ │                    │
-│  └───────────────────────────────────┘ │                    │
-│              │            │            │                    │
-│              ▼            ▼            ▼                    │
-│        ┌──────────┐ ┌──────────┐ ┌──────────────┐          │
-│        │  SQLite  │ │ ChromaDB │ │ Cost Tracker │          │
-│        │  (Users, │ │ (Vectors)│ │ (Token/USD)  │          │
-│        │  Docs,   │ │          │ │              │          │
-│        │  Chats)  │ │          │ │              │          │
-│        └──────────┘ └──────────┘ └──────────────┘          │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  React Frontend (port 5173)                                      │
+│  ┌────────────┐ ┌────────────┐ ┌──────────────┐ ┌────────────┐  │
+│  │   Login /  │ │  Dashboard │ │  Chat with   │ │  Usage &   │  │
+│  │  Register  │ │  Upload PDF│ │  Sources     │ │  Cost View │  │
+│  └────────────┘ └────────────┘ └──────────────┘ └────────────┘  │
+│                         │ proxy /api/*                            │
+└─────────────────────────┼────────────────────────────────────────┘
+                          ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  FastAPI Backend (port 8000)                                     │
+│                                                                  │
+│  ┌──────────┐  ┌──────────────┐  ┌────────────────────┐         │
+│  │   Auth   │  │  Rate Limit  │  │  Request Logger    │         │
+│  │Middleware │  │  Middleware   │  │  Middleware         │         │
+│  └──────────┘  └──────────────┘  └────────────────────┘         │
+│                                                                  │
+│  ┌──────────────────── API Routes ─────────────────────────┐     │
+│  │  /auth  │  /documents  │  /chat  │  /conversations     │     │
+│  │         │              │         │  /usage              │     │
+│  └─────────────────────────────────────────────────────────┘     │
+│                           │                                      │
+│              ┌────────────▼────────────┐                         │
+│              │      RAG Pipeline       │                         │
+│              │                         │                         │
+│  ┌───────────┴───────────────────────────────────────────┐       │
+│  │  PDF Parser ──► Chunker ──► Embedder ──► Vector Store │       │
+│  │  (PyMuPDF)    (LangChain)  (OpenAI)    (ChromaDB)    │       │
+│  │  (pdfplumber)                                         │       │
+│  │                                                       │       │
+│  │  Query ──► Embed ──► Retrieve ──► Generate (GPT-4o)   │       │
+│  └───────────────────────────────────────────────────────┘       │
+│              │            │            │                         │
+│              ▼            ▼            ▼                         │
+│        ┌──────────┐ ┌──────────┐ ┌──────────────┐               │
+│        │  SQLite  │ │ ChromaDB │ │ Cost Tracker │               │
+│        │  (Users, │ │ (Vectors)│ │ (Token/USD)  │               │
+│        │  Docs,   │ │          │ │              │               │
+│        │  Chats)  │ │          │ │              │               │
+│        └──────────┘ └──────────┘ └──────────────┘               │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -87,6 +94,7 @@ Using **gpt-4o-mini** and **text-embedding-3-small** for maximum cost efficiency
 
 ### Prerequisites
 - Python 3.11+
+- Node.js 18+ (for the React frontend)
 - OpenAI API key
 
 ### 1. Clone & configure
@@ -98,25 +106,48 @@ cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY
 ```
 
-### 2. Install & run
+### 2. Install dependencies
 
 ```bash
-# Using conda/mamba
+# Backend (Python)
 mamba activate ml-env
 pip install -r requirements.txt
 
-# Start the server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Frontend (React)
+cd frontend
+npm install
+cd ..
 ```
 
-### 3. Open the API docs
+### 3. Run both servers
 
-Navigate to `http://localhost:8000/docs` for the interactive Swagger UI.
+The project requires **two servers** running simultaneously:
+
+```bash
+# Terminal 1 — Backend API (port 8000)
+mamba activate ml-env
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 — Frontend UI (port 5173)
+cd frontend
+npx vite --host 0.0.0.0 --port 5173
+```
+
+### 4. Open the app
+
+| URL | What |
+|-----|------|
+| `http://localhost:5173` | React frontend (the web app) |
+| `http://localhost:8000/docs` | Swagger API docs (interactive) |
+| `http://localhost:8000/health` | Health check endpoint |
+
+> The frontend on port 5173 proxies all `/api/*` requests to the backend on port 8000 automatically.
 
 ### Docker
 
 ```bash
 docker compose up --build
+# Opens on http://localhost:8000
 ```
 
 ---
@@ -193,44 +224,60 @@ Current test coverage includes:
 ## Project Structure
 
 ```
-├── app/
-│   ├── main.py                 # FastAPI app with lifespan
-│   ├── config.py               # Pydantic settings from .env
+├── app/                            # FastAPI backend
+│   ├── main.py                     # App entrypoint with lifespan
+│   ├── config.py                   # Pydantic settings from .env
 │   ├── api/
-│   │   ├── deps.py             # Auth dependency injection
+│   │   ├── deps.py                 # Auth dependency injection
 │   │   └── routes/
-│   │       ├── auth.py         # Register, login, /me
-│   │       ├── documents.py    # Upload, list, delete PDFs
-│   │       ├── chat.py         # RAG query + streaming
-│   │       ├── conversations.py # Chat history management
-│   │       └── usage.py        # Cost & usage analytics
+│   │       ├── auth.py             # Register, login, /me
+│   │       ├── documents.py        # Upload, list, delete PDFs
+│   │       ├── chat.py             # RAG query + streaming
+│   │       ├── conversations.py    # Chat history management
+│   │       └── usage.py            # Cost & usage analytics
 │   ├── auth/
-│   │   └── security.py         # JWT + bcrypt
+│   │   └── security.py             # JWT + bcrypt
 │   ├── db/
-│   │   ├── database.py         # SQLAlchemy engine + session
-│   │   └── models.py           # User, Document, Conversation, Message, UsageLog
+│   │   ├── database.py             # SQLAlchemy engine + session
+│   │   └── models.py               # User, Document, Conversation, Message, UsageLog
 │   ├── middleware/
-│   │   ├── rate_limiter.py     # Sliding-window rate limiter
-│   │   └── request_logger.py   # Structured request logging
+│   │   ├── rate_limiter.py         # Sliding-window rate limiter
+│   │   └── request_logger.py       # Structured request logging
 │   ├── rag/
-│   │   ├── pipeline.py         # Orchestrates ingestion + query
-│   │   ├── cost_tracker.py     # Token counting + USD cost calculation
+│   │   ├── pipeline.py             # Orchestrates ingestion + query
+│   │   ├── cost_tracker.py         # Token counting + USD cost calculation
 │   │   ├── ingestion/
-│   │   │   ├── pdf_parser.py   # PyMuPDF + pdfplumber multimodal extraction
-│   │   │   ├── chunker.py      # RecursiveCharacterTextSplitter
-│   │   │   └── models.py       # ExtractedChunk, ParsedDocument
+│   │   │   ├── pdf_parser.py       # PyMuPDF + pdfplumber extraction
+│   │   │   ├── chunker.py          # RecursiveCharacterTextSplitter
+│   │   │   └── models.py           # ExtractedChunk, ParsedDocument
 │   │   ├── embedding/
-│   │   │   └── embedder.py     # OpenAI embeddings + vision captioning
+│   │   │   └── embedder.py         # OpenAI embeddings + vision captioning
 │   │   ├── generation/
-│   │   │   └── generator.py    # LLM generation + streaming
+│   │   │   └── generator.py        # LLM generation + streaming
 │   │   └── storage/
-│   │       └── vector_store.py # Per-user ChromaDB collections
+│   │       └── vector_store.py     # Per-user ChromaDB collections
 │   └── schemas/
-│       └── __init__.py         # Pydantic request/response models
-├── tests/                      # pytest test suite
-├── Dockerfile                  # Production container
-├── docker-compose.yml          # Single-command deployment
-├── .github/workflows/ci.yml   # CI pipeline
+│       └── __init__.py             # Pydantic request/response models
+├── frontend/                       # React frontend (Vite)
+│   ├── src/
+│   │   ├── App.jsx                 # Router with protected routes
+│   │   ├── api/client.js           # API client + streaming helper
+│   │   ├── context/AuthContext.jsx  # JWT auth state management
+│   │   ├── components/
+│   │   │   ├── ChatPanel.jsx       # Chat with cost badges + sources
+│   │   │   ├── DocumentList.jsx    # Document list with status
+│   │   │   ├── DocumentUpload.jsx  # Drag-and-drop PDF upload
+│   │   │   └── Layout.jsx          # Navigation + shell
+│   │   └── pages/
+│   │       ├── Dashboard.jsx       # Main view: upload + chat + conversations
+│   │       ├── UsageDashboard.jsx  # Cost analytics + bar charts
+│   │       ├── Login.jsx           # Login form
+│   │       └── Register.jsx        # Registration form
+│   └── package.json
+├── tests/                          # pytest test suite (43 tests)
+├── Dockerfile                      # Production container
+├── docker-compose.yml              # Single-command deployment
+├── .github/workflows/ci.yml       # CI pipeline
 └── requirements.txt
 ```
 
@@ -240,6 +287,7 @@ Current test coverage includes:
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
+| Frontend | React + Vite | Fast dev, modern SPA, proxied API |
 | API | FastAPI | Async, auto-docs, type-safe, high performance |
 | LLM | OpenAI GPT-4o-mini | Cost-efficient, multimodal capable |
 | Embeddings | text-embedding-3-small | Best cost/quality ratio |
