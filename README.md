@@ -1,6 +1,6 @@
 # Multimodal RAG API | FastAPI · LangChain · OpenAI · ChromaDB · React
 
-A production-ready Retrieval-Augmented Generation system that processes PDFs multimodally — extracting **text**, **tables**, and **images** (with GPT-4o vision captioning) — to enable intelligent Q&A with source citations. Features per-user data isolation, JWT authentication, real-time cost tracking (~€0.0005/query), streaming responses, and a React dashboard. Deployed on FastAPI with Docker support, rate limiting, and CI/CD — designed for cost-efficient, scalable document intelligence.
+A Production-Oriented Retrieval-Augmented Generation system that processes PDFs multimodally — extracting **text**, **tables**, and **images** (with GPT-4o vision captioning) — to enable intelligent Q&A with source citations. Features per-user data isolation, JWT authentication, real-time cost tracking (~€0.0005/query), streaming responses, and a React dashboard. Deployed on FastAPI with Docker support, rate limiting, and CI/CD — designed for cost-efficient, scalable document intelligence.
 
 ---
 
